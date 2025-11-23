@@ -311,7 +311,7 @@ This model was trained on the BigEarthNet V2 dataset using:
 - Top 5 predicted classes are shown with confidence scores
 
 ### Links
-- [GitHub Repository](https://github.com/Sudarshan-Hegde/Agri-SR-AL-Net)
+- [GitHub Repository](https://github.com/Sudarshan-Hegde/Agri-SR-AL-Net.git)
 - [BigEarthNet Dataset](http://bigearth.net/)
 """
 
