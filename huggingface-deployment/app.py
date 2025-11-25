@@ -321,9 +321,9 @@ examples = [
 
 demo = gr.Interface(
     fn=predict,
-    inputs=gr.Image(type="pil", label="Upload Satellite Image"),
+    inputs=gr.Image(label="Upload Satellite Image"),
     outputs=[
-        gr.Image(type="pil", label="Enhanced Image (SR)"),
+        gr.Image(label="Enhanced Image (SR)"),
         gr.Label(num_top_classes=5, label="Land Cover Classification")
     ],
     title=title,
