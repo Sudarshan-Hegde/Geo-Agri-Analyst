@@ -68,48 +68,53 @@ class RFB(nn.Module):
         return self.relu(out + x) if self.in_c == self.out_c else self.relu(out)
 
 class DenseBlock(nn.Module):
-    """Dense block with 5 layers"""
-    def __init__(self, in_c, growth_rate=32):
+    """Dense block with 5 layers - EXACT architecture from training"""
+    def __init__(self, nf=64):
         super().__init__()
-        self.convs = nn.ModuleList([
-            nn.Sequential(
-                nn.Conv2d(in_c + i * growth_rate, growth_rate, 3, 1, 1),
-                nn.LeakyReLU(0.2, inplace=True)
-            ) for i in range(5)
-        ])
-        self.fuse = nn.Conv2d(5 * growth_rate, in_c, 1, 1, 0)
+        nf_internal = 32
+        self.conv1 = nn.Conv2d(nf, nf_internal, 3, 1, 1)
+        self.conv2 = nn.Conv2d(nf + nf_internal, nf_internal, 3, 1, 1)
+        self.conv3 = nn.Conv2d(nf + nf_internal*2, nf_internal, 3, 1, 1)
+        self.conv4 = nn.Conv2d(nf + nf_internal*3, nf_internal, 3, 1, 1)
+        self.conv5 = nn.Conv2d(nf + nf_internal*4, nf, 3, 1, 1)
         
     def forward(self, x):
-        feats = [x]
-        for conv in self.convs:
-            feats.append(conv(torch.cat(feats, 1)))
-        return self.fuse(torch.cat(feats[1:], 1))
+        x1 = F.relu(self.conv1(x))
+        x2 = F.relu(self.conv2(torch.cat([x, x1], 1)))
+        x3 = F.relu(self.conv3(torch.cat([x, x1, x2], 1)))
+        x4 = F.relu(self.conv4(torch.cat([x, x1, x2, x3], 1)))
+        x5 = self.conv5(torch.cat([x, x1, x2, x3, x4], 1))
+        return x5 * 0.2 + x
 
 class RRDB(nn.Module):
-    """Residual in Residual Dense Block"""
-    def __init__(self, nc=64, growth_rate=32):
+    """Residual in Residual Dense Block - EXACT architecture from training"""
+    def __init__(self, nf=64):
         super().__init__()
-        self.db1 = DenseBlock(nc, growth_rate)
-        self.db2 = DenseBlock(nc, growth_rate)
-        self.db3 = DenseBlock(nc, growth_rate)
+        self.db1 = DenseBlock(nf)
+        self.db2 = DenseBlock(nf)
+        self.db3 = DenseBlock(nf)
         
     def forward(self, x):
-        out = self.db1(x)
-        out = self.db2(out)
-        out = self.db3(out)
+        out = self.db3(self.db2(self.db1(x)))
         return out * 0.2 + x
 
 class RRFDB(nn.Module):
-    """Residual RFB Dense Block"""
-    def __init__(self, nc=64, growth_rate=32):
+    """Residual RFB Dense Block - EXACT architecture from training"""
+    def __init__(self, nf=64):
         super().__init__()
-        self.db = DenseBlock(nc, growth_rate)
-        self.rfb = RFB(nc, nc)
+        self.rfb1 = RFB(nf, nf)
+        self.rfb2 = RFB(nf, nf)
+        self.rfb3 = RFB(nf, nf)
+        self.rfb4 = RFB(nf, nf)
+        self.rfb5 = RFB(nf, nf)
         
     def forward(self, x):
-        db_out = self.db(x)
-        rfb_out = self.rfb(db_out)
-        return rfb_out * 0.2 + x
+        out = self.rfb1(x)
+        out = self.rfb2(out)
+        out = self.rfb3(out)
+        out = self.rfb4(out)
+        out = self.rfb5(out)
+        return out * 0.2 + x
 
 class Generator(nn.Module):
     """RFB-ESRGAN Generator with 12 RRDB + 6 RRFDB blocks"""
