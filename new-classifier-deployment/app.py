@@ -11,6 +11,7 @@ from torchvision.models import resnet50, ResNet50_Weights
 import numpy as np
 from PIL import Image
 import json
+import os
 
 # --------------------------------------------------------------------------------
 # SR MODEL ARCHITECTURE (RFB-ESRGAN Generator)
@@ -192,63 +193,88 @@ class SREnhancedClassifier(nn.Module):
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"🔧 Using device: {device}")
 
-# Load class names (19 classes for the new model)
-# These are BigEarthNet-S2 19-class labels
-CLASS_NAMES = [
-    "Urban fabric",
-    "Industrial or commercial units", 
-    "Arable land",
-    "Permanent crops",
-    "Pastures",
-    "Complex cultivation patterns",
-    "Land principally occupied by agriculture",
-    "Agro-forestry areas",
-    "Broad-leaved forest",
-    "Coniferous forest",
-    "Mixed forest",
-    "Natural grassland and sparsely vegetated areas",
-    "Moors, heathland and sclerophyllous vegetation",
-    "Transitional woodland/shrub",
-    "Beaches, dunes, sands",
-    "Inland wetlands",
-    "Coastal wetlands",
-    "Inland waters",
-    "Marine waters"
-]
-
-num_classes = 19
+# Load class names from labels_indices.json if available
+try:
+    with open('labels_indices.json', 'r') as f:
+        label_data = json.load(f)
+        if isinstance(label_data, dict):
+            CLASS_NAMES = [label_data[str(i)] for i in range(len(label_data))]
+        elif isinstance(label_data, list):
+            CLASS_NAMES = label_data
+        else:
+            raise ValueError("labels_indices.json must be a list or dict")
+    num_classes = len(CLASS_NAMES)
+    print(f"✅ Loaded {num_classes} class names from labels_indices.json")
+except Exception as e:
+    print(f"⚠️ Error loading class names: {e}")
+    CLASS_NAMES = [
+        "Urban fabric",
+        "Industrial or commercial units", 
+        "Arable land",
+        "Permanent crops",
+        "Pastures",
+        "Complex cultivation patterns",
+        "Land principally occupied by agriculture",
+        "Agro-forestry areas",
+        "Broad-leaved forest",
+        "Coniferous forest",
+        "Mixed forest",
+        "Natural grassland and sparsely vegetated areas",
+        "Moors, heathland and sclerophyllous vegetation",
+        "Transitional woodland/shrub",
+        "Beaches, dunes, sands",
+        "Inland wetlands",
+        "Coastal wetlands",
+        "Inland waters",
+        "Marine waters"
+    ]
+    num_classes = 19
+    print("⚠️ Using default class names.")
 
 print("📦 Loading SR model...")
 sr_model = Generator(nc=64, num_rrdb=12, num_rrfdb=6, scale=8).to(device)
-
-# Load SR weights (download from your Kaggle or provide path)
-try:
-    sr_weights = torch.load('sr_generator_weights.pth', map_location=device)
-    sr_model.load_state_dict(sr_weights)
-    print("✅ SR model loaded successfully")
-except FileNotFoundError:
-    print("⚠️ SR weights not found, using random initialization")
+sr_weights_path = 'generator_ensable.pth'
+if not os.path.exists(sr_weights_path):
+    print(f"⚠️ SR weights not found at {sr_weights_path}, using random initialization")
+else:
+    try:
+        sr_weights = torch.load(sr_weights_path, map_location=device)
+        missing, unexpected = sr_model.load_state_dict(sr_weights, strict=False)
+        if missing:
+            print(f"⚠️ SR weights missing keys: {missing}")
+        if unexpected:
+            print(f"⚠️ SR weights unexpected keys: {unexpected}")
+        if not missing and not unexpected:
+            print(f"✅ SR model loaded successfully from {sr_weights_path}")
+        else:
+            print(f"⚠️ SR weights loaded with issues, using partial weights.")
+    except Exception as e:
+        print(f"⚠️ Error loading SR weights: {e}\nUsing random initialization.")
 
 sr_model.eval()
 
 print("📦 Loading classifier...")
-# Initialize classifier
 classifier = SREnhancedClassifier(num_classes, sr_model).to(device)
-
-# Load classifier weights
-try:
-    # Handle DataParallel wrapped state dict
-    state_dict = torch.load('best_classifier.pth', map_location=device)
-    
-    # Remove 'module.' prefix if present
-    if list(state_dict.keys())[0].startswith('module.'):
-        state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
-    
-    classifier.load_state_dict(state_dict)
-    print("✅ Classifier loaded successfully")
-except Exception as e:
-    print(f"⚠️ Error loading classifier: {e}")
-    print("Using randomly initialized classifier")
+classifier_weights_path = 'best_classifier.pth'
+if not os.path.exists(classifier_weights_path):
+    print(f"⚠️ Classifier weights not found at {classifier_weights_path}, using random initialization")
+else:
+    try:
+        state_dict = torch.load(classifier_weights_path, map_location=device)
+        # Remove 'module.' prefix if present
+        if list(state_dict.keys())[0].startswith('module.'):
+            state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+        missing, unexpected = classifier.load_state_dict(state_dict, strict=False)
+        if missing:
+            print(f"⚠️ Classifier weights missing keys: {missing}")
+        if unexpected:
+            print(f"⚠️ Classifier weights unexpected keys: {unexpected}")
+        if not missing and not unexpected:
+            print("✅ Classifier loaded successfully")
+        else:
+            print(f"⚠️ Classifier weights loaded with issues, using partial weights.")
+    except Exception as e:
+        print(f"⚠️ Error loading classifier: {e}\nUsing randomly initialized classifier")
 
 classifier.eval()
 
@@ -392,5 +418,5 @@ if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
-        share=False  # HuggingFace Spaces handles public access
+        share=True  # HuggingFace Spaces handles public access
     )
