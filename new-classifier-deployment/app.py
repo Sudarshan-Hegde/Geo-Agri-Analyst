@@ -17,55 +17,44 @@ import json
 # --------------------------------------------------------------------------------
 
 class RFB(nn.Module):
-    """Receptive Field Block for multi-scale feature extraction"""
-    def __init__(self, in_c, out_c):
+    """Receptive Field Block - EXACT architecture from training checkpoint"""
+    def __init__(self, in_channels=64):
         super().__init__()
-        self.in_c = in_c
-        self.out_c = out_c
-        
-        # Branch 1: 1x1 conv
+        # Branch 1: AvgPool(3) + Conv + ReLU + Conv
         self.branch1 = nn.Sequential(
-            nn.Conv2d(in_c, out_c // 4, 1, 1, 0),
+            nn.AvgPool2d(3, stride=1, padding=1),
+            nn.Conv2d(in_channels, 16, 1, 1, 0),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 16, 3, 1, padding=1, dilation=1),
             nn.ReLU(inplace=True)
         )
-        
-        # Branch 2: 1x1 -> 3x3 conv
+        # Branch 2: AvgPool(5) + Conv + ReLU + Conv
         self.branch2 = nn.Sequential(
-            nn.Conv2d(in_c, out_c // 4, 1, 1, 0),
+            nn.AvgPool2d(5, stride=1, padding=2),
+            nn.Conv2d(in_channels, 24, 1, 1, 0),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_c // 4, out_c // 4, 3, 1, 1),
+            nn.Conv2d(24, 24, 3, 1, padding=2, dilation=2),
             nn.ReLU(inplace=True)
         )
-        
-        # Branch 3: 1x1 -> 5x5 conv (dilated 3x3)
+        # Branch 3: AvgPool(7) + Conv + ReLU + Conv
         self.branch3 = nn.Sequential(
-            nn.Conv2d(in_c, out_c // 4, 1, 1, 0),
+            nn.AvgPool2d(7, stride=1, padding=3),
+            nn.Conv2d(in_channels, 24, 1, 1, 0),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_c // 4, out_c // 4, 3, 1, 2, dilation=2),
+            nn.Conv2d(24, 24, 3, 1, padding=3, dilation=3),
             nn.ReLU(inplace=True)
         )
-        
-        # Branch 4: 1x1 -> 7x7 conv (dilated 3x3)
-        self.branch4 = nn.Sequential(
-            nn.Conv2d(in_c, out_c // 4, 1, 1, 0),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_c // 4, out_c // 4, 3, 1, 3, dilation=3),
-            nn.ReLU(inplace=True)
+        # Fusion layer
+        self.conv_concat = nn.Sequential(
+            nn.Conv2d(64, 64, 1, 1, 0)
         )
-        
-        # Fusion
-        self.conv_fuse = nn.Conv2d(out_c, out_c, 1, 1, 0)
-        self.relu = nn.ReLU(inplace=True)
         
     def forward(self, x):
         b1 = self.branch1(x)
         b2 = self.branch2(x)
         b3 = self.branch3(x)
-        b4 = self.branch4(x)
-        
-        fused = torch.cat([b1, b2, b3, b4], dim=1)
-        out = self.conv_fuse(fused)
-        return self.relu(out + x) if self.in_c == self.out_c else self.relu(out)
+        out = torch.cat([b1, b2, b3], 1)
+        return self.conv_concat(out) * 0.2 + x
 
 class DenseBlock(nn.Module):
     """Dense block with 5 layers - EXACT architecture from training"""
@@ -102,11 +91,11 @@ class RRFDB(nn.Module):
     """Residual RFB Dense Block - EXACT architecture from training"""
     def __init__(self, nf=64):
         super().__init__()
-        self.rfb1 = RFB(nf, nf)
-        self.rfb2 = RFB(nf, nf)
-        self.rfb3 = RFB(nf, nf)
-        self.rfb4 = RFB(nf, nf)
-        self.rfb5 = RFB(nf, nf)
+        self.rfb1 = RFB(nf)
+        self.rfb2 = RFB(nf)
+        self.rfb3 = RFB(nf)
+        self.rfb4 = RFB(nf)
+        self.rfb5 = RFB(nf)
         
     def forward(self, x):
         out = self.rfb1(x)
