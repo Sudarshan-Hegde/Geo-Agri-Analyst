@@ -119,11 +119,11 @@ class Generator(nn.Module):
         # Initial convolution
         self.conv_first = nn.Conv2d(3, nc, 3, 1, 1)
         
-        # RRDB trunk (12 blocks)
-        self.rrdb_trunk = nn.Sequential(*[RRDB(nc) for _ in range(num_rrdb)])
+        # RRDB trunk (12 blocks) - named trunk_a to match training checkpoint
+        self.trunk_a = nn.Sequential(*[RRDB(nc) for _ in range(num_rrdb)])
         
-        # RRFDB trunk (6 blocks)
-        self.rrfdb_trunk = nn.Sequential(*[RRFDB(nc) for _ in range(num_rrfdb)])
+        # RRFDB trunk (6 blocks) - named trunk_rfb to match training checkpoint
+        self.trunk_rfb = nn.Sequential(*[RRFDB(nc) for _ in range(num_rrfdb)])
         
         # Trunk fusion
         self.trunk_conv = nn.Conv2d(nc, nc, 3, 1, 1)
@@ -144,9 +144,9 @@ class Generator(nn.Module):
         
     def forward(self, x):
         feat = self.lrelu(self.conv_first(x))
-        trunk_rrdb = self.rrdb_trunk(feat)
-        trunk_rrfdb = self.rrfdb_trunk(trunk_rrdb)
-        trunk = self.trunk_conv(trunk_rrfdb)
+        trunk_a_out = self.trunk_a(feat)
+        trunk_rfb_out = self.trunk_rfb(trunk_a_out)
+        trunk = self.trunk_conv(trunk_rfb_out)
         feat = feat + trunk
         
         # Upsample 8x (2x2x2)
@@ -395,4 +395,8 @@ demo = gr.Interface(
 
 if __name__ == "__main__":
     print("\n🚀 Launching Gradio interface...")
-    demo.launch()
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        share=False  # HuggingFace Spaces handles public access
+    )
