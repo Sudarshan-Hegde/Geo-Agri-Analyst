@@ -30,7 +30,7 @@ class HuggingFaceModelService:
             hf_token: HuggingFace API token (required for private Spaces)
         """
         # Update this with your actual HuggingFace Space name
-        self.space_url = space_url or "HegdeSudarshan/BigEarthNetModels"
+        self.space_url = space_url or "HegdeSudarshan/Classifier"
         # For private Spaces, set your HF token here or via environment variable
         self.hf_token = hf_token or os.getenv("HF_TOKEN")
         self.client = None

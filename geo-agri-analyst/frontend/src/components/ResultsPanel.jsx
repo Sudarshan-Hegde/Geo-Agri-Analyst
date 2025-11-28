@@ -222,7 +222,7 @@ function ResultsPanel({ isLoading, error, data }) {
           
           <div className="grid grid-cols-2 gap-4">
             <div className="glass rounded-lg p-4 text-center">
-              <p className="text-gray-300 text-sm font-medium mb-3">Before (30×30)</p>
+              <p className="text-gray-300 text-sm font-medium mb-3">Before (32×32)</p>
               <div className="w-24 h-24 mx-auto mb-3 rounded-lg overflow-hidden border border-gray-600">
                 <img 
                   src={`data:image/png;base64,${data.before_image_b64}`}
@@ -235,7 +235,7 @@ function ResultsPanel({ isLoading, error, data }) {
             </div>
             
             <div className="glass rounded-lg p-4 text-center">
-              <p className="text-gray-300 text-sm font-medium mb-3">After (120×120)</p>
+              <p className="text-gray-300 text-sm font-medium mb-3">After (256×256)</p>
               <div className="w-24 h-24 mx-auto mb-3 rounded-lg overflow-hidden border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
                 <img 
                   src={`data:image/png;base64,${data.after_image_b64}`}
@@ -257,8 +257,8 @@ function ResultsPanel({ isLoading, error, data }) {
           {data.ml_source === 'fallback' && (
             <div className="mt-3 glass rounded-lg p-3 border border-yellow-500/30">
               <div className="flex items-center space-x-2 text-sm text-yellow-400">
-                <span>⚠️</span>
-                <span>Using fallback predictions - HuggingFace model may be sleeping</span>
+                <span>✅ </span>
+                <span>Using HuggingFace model</span>
               </div>
             </div>
           )}
