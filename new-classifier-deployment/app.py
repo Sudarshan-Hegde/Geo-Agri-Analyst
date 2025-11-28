@@ -195,7 +195,7 @@ print(f"🔧 Using device: {device}")
 
 # Load class names from labels_indices.json if available
 try:
-    with open('labels_indices.json', 'r') as f:
+    with open('label_indices.json', 'r') as f:
         label_data = json.load(f)
         if isinstance(label_data, dict):
             CLASS_NAMES = [label_data[str(i)] for i in range(len(label_data))]
@@ -337,7 +337,10 @@ def predict(image):
         print(f"❌ Error during inference: {e}")
         import traceback
         traceback.print_exc()
-        return None, {"error": str(e)}
+        # Return blank image and zeroed predictions for all classes
+        blank_img = Image.new("RGB", (256, 256), color=(128, 128, 128))
+        zero_preds = {name: 0.0 for name in CLASS_NAMES}
+        return blank_img, zero_preds
 
 # --------------------------------------------------------------------------------
 # GRADIO INTERFACE
@@ -415,8 +418,4 @@ demo = gr.Interface(
 
 if __name__ == "__main__":
     print("\n🚀 Launching Gradio interface...")
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=True  # HuggingFace Spaces handles public access
-    )
+    demo.launch(share=True)
