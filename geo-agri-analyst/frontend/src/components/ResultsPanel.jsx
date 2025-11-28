@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 function ResultsPanel({ isLoading, error, data }) {
   const [currentStep, setCurrentStep] = useState(0)
+  const navigate = useNavigate()
   
   const steps = [
     "Fetching satellite imagery...",
@@ -318,8 +320,7 @@ function ResultsPanel({ isLoading, error, data }) {
                 {/* View More Button */}
                 <button
                   onClick={() => {
-                    // Navigate to analytics page - implement this based on your routing
-                    console.log('Navigate to analytics page with full crop history')
+                    navigate('/analytics')
                   }}
                   className="w-full mt-2 glass rounded-lg p-2 text-sm text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-all"
                 >
@@ -477,8 +478,7 @@ function ResultsPanel({ isLoading, error, data }) {
               {/* View All Button */}
               <button
                 onClick={() => {
-                  // Navigate to analytics page for full crop suggestions
-                  console.log('Navigate to analytics page for full crop recommendations')
+                  navigate('/analytics')
                 }}
                 className="w-full mt-4 glass rounded-lg p-3 text-sm text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 transition-all font-medium border border-orange-500/20 hover:border-orange-500/40"
               >

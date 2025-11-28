@@ -1,12 +1,9 @@
-import torch
-import torch.nn.functional as F
+
+from gradio_client import Client, handle_file
+from PIL import Image
 import numpy as np
 import base64
 import io
-from PIL import Image
-import cv2
-from pathlib import Path
-from .models import SR_Model, CLF_Model
 
 
 class ModelService:
@@ -14,24 +11,9 @@ class ModelService:
     Service class for loading and running the ML pipeline
     """
     
-    def __init__(self, model_weights_dir: str = "./model_weights"):
-        """
-        Initialize the service and load both models
-        
-        Args:
-            model_weights_dir: Directory containing the model weight files
-        """
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model_weights_dir = Path(model_weights_dir)
-        
-        # Initialize models
-        self.sr_model = None
-        self.clf_model = None
-        
-        # Load models
-        self._load_models()
-        
-        print(f"ModelService initialized on device: {self.device}")
+    def __init__(self):
+        self.client = Client("HegdeSudarshan/Classifier")
+        print("ModelService initialized with Hugging Face Classifier API.")
     
     def _load_models(self):
         """Load both SR and Classification models from saved weights"""
@@ -148,56 +130,84 @@ class ModelService:
     
     def run_pipeline(self, image_data):
         """
-        Run the complete ML pipeline: HR -> LR -> SR -> Classification
-        
+        Run the ML pipeline using Hugging Face Classifier API
         Args:
-            image_data: Input image data (PIL Image, numpy array, or tensor)
-        
+            image_data: Input image data (PIL Image, numpy array, or file path)
         Returns:
             Dict containing:
                 - land_class_name: Predicted class name
                 - confidence_score: Confidence of the prediction
-                - lr_image_b64: Low-resolution image as base64
-                - sr_image_b64: Super-resolved image as base64
+                - sr_image_b64: Enhanced image as base64
+                - error: Error message if any
         """
+        import requests
         try:
-            with torch.no_grad():
-                # Step 1: Preprocess to create LR input
-                lr_tensor = self._preprocess_image(image_data, target_size=(16, 16))
-                
-                # Step 2: Run SR model
-                sr_tensor = self.sr_model(lr_tensor)
-                
-                # Step 3: Run Classification model
-                logits = self.clf_model(sr_tensor)
-                probabilities = F.softmax(logits, dim=1)
-                
-                # Get prediction
-                pred_idx = torch.argmax(probabilities, dim=1).item()
-                confidence = probabilities[0, pred_idx].item()
-                
-                # Get class name
-                land_class_name = self.clf_model.class_names[pred_idx]
-                
-                # Convert images to base64
-                lr_image_b64 = self._tensor_to_base64(lr_tensor)
-                sr_image_b64 = self._tensor_to_base64(sr_tensor)
-                
-                return {
-                    "land_class_name": land_class_name,
-                    "confidence_score": confidence,
-                    "lr_image_b64": lr_image_b64,
-                    "sr_image_b64": sr_image_b64
-                }
-                
+            # Convert image_data to file if needed
+            if isinstance(image_data, Image.Image):
+                buffer = io.BytesIO()
+                image_data.save(buffer, format='PNG')
+                buffer.seek(0)
+                image_path = "temp_input.png"
+                with open(image_path, "wb") as f:
+                    f.write(buffer.getvalue())
+            elif isinstance(image_data, str):
+                image_path = image_data
+            else:
+                # Assume numpy array
+                pil_img = Image.fromarray(image_data)
+                buffer = io.BytesIO()
+                pil_img.save(buffer, format='PNG')
+                buffer.seek(0)
+                image_path = "temp_input.png"
+                with open(image_path, "wb") as f:
+                    f.write(buffer.getvalue())
+
+            result = self.client.predict(
+                image=handle_file(image_path),
+                api_name="/predict"
+            )
+            # result[0]: enhanced image dict, result[1]: classification dict
+            sr_img_url = result[0].get("url")
+            sr_img_b64 = ""
+            error_msg = None
+            if sr_img_url:
+                try:
+                    resp = requests.get(sr_img_url)
+                    if resp.status_code == 200:
+                        sr_img_b64 = base64.b64encode(resp.content).decode('utf-8')
+                    else:
+                        error_msg = f"Failed to fetch SR image, status code: {resp.status_code}"
+                except Exception as img_err:
+                    error_msg = f"Exception fetching SR image: {img_err}"
+            else:
+                error_msg = "SR image URL missing from API response."
+
+            label = result[1].get("label")
+            confidences = result[1].get("confidences", [])
+            confidence_score = 0.0
+            if confidences and isinstance(confidences, list):
+                for c in confidences:
+                    if c.get("label") == label:
+                        confidence_score = c.get("confidence", 0.0)
+                        break
+
+            # If SR image is missing, add error info
+            if not sr_img_b64:
+                print(f"[MLService] Warning: SR image not returned. Reason: {error_msg}")
+
+            return {
+                "land_class_name": label,
+                "confidence_score": confidence_score,
+                "sr_image_b64": sr_img_b64,
+                "error": error_msg
+            }
         except Exception as e:
             print(f"Error in ML pipeline: {e}")
-            # Return fallback response
             return {
-                "land_class_name": "Arable Land",
-                "confidence_score": 0.85,
-                "lr_image_b64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
-                "sr_image_b64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+                "land_class_name": None,
+                "confidence_score": 0.0,
+                "sr_image_b64": "",
+                "error": str(e)
             }
     
     def create_fake_satellite_image(self, width=64, height=64):
