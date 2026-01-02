@@ -12,7 +12,7 @@ from typing import Dict, Optional, List, Tuple
 import asyncio
 import os
 import tempfile
-from app.satellite_service import get_satellite_service
+from satellite_service import get_satellite_service
 
 
 class HuggingFaceModelService:

@@ -11,11 +11,11 @@ import logging
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Relative imports for package structure
-from app.weather_service import get_agricultural_climate_summary
-from app.huggingface_service import get_hf_service
-from app.crop_history_service import get_crop_history_service
-from app.crop_suggestion_service import get_crop_suggestion_service
-from app.polygon_utils import (
+from weather_service import get_agricultural_climate_summary
+from huggingface_service import get_hf_service
+from crop_history_service import get_crop_history_service
+from crop_suggestion_service import get_crop_suggestion_service
+from polygon_utils import (
     generate_grid_samples,
     estimate_polygon_area_km2,
     determine_optimal_zoom,
@@ -435,7 +435,7 @@ async def analyze_location(request: Union[Coords, AnalysisRequest]):
         print(f"🔍 Using zoom level {point_zoom} for point analysis")
         
         # Get prediction with custom zoom
-        from app.satellite_service import get_satellite_service
+        from satellite_service import get_satellite_service
         satellite_svc = get_satellite_service()
         image = satellite_svc.get_satellite_image(lat, lng, size=30, zoom=point_zoom)
         
