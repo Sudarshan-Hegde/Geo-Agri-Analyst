@@ -1,0 +1,1 @@
+cd C:\Users\sudar\OneDrive\Desktop\majorProject\Agri-SR-AL-Net\geo-agri-analyst\backend ; C:\Users\sudar\OneDrive\Desktop\majorProject\.venv\Scripts\uvicorn.exe app.main:app --reload --port 8000

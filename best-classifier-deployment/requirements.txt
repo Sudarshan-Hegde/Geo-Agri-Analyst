@@ -1,0 +1,20 @@
+# HuggingFace Spaces Requirements for BestClassifier
+# Streamlit version to avoid Gradio json_schema bug
+
+# Streamlit - Web UI framework
+streamlit
+
+# PyTorch - Deep Learning Framework
+torch==2.1.0
+torchvision==0.16.0
+
+# Image Processing
+pillow>=10.0.0
+
+# Numerical Computing
+numpy<2.0.0
+
+# Optional: Add other dependencies used in training
+# scipy
+# scikit-learn
+# opencv-python-headless

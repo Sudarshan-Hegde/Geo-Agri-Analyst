@@ -53,8 +53,8 @@ class CropSuggestionService:
             "avg_market_price_inr_per_kg": 49800,
             "investment_cost_inr_per_hectare": 664000,
             "growing_months": 36,
-            "optimal_temp_range": (21, 32),
-            "min_rainfall_mm": 2000,
+            "optimal_temp_range": (25, 30),
+            "min_rainfall_mm": 2500,
             "max_rainfall_mm": 3500,
             "soil_types": ["rich organic", "loamy", "well-drained"],
             "climate_zones": ["tropical"],
@@ -71,11 +71,11 @@ class CropSuggestionService:
             "avg_market_price_inr_per_kg": 249,
             "investment_cost_inr_per_hectare": 415000,
             "growing_months": 4,
-            "optimal_temp_range": (18, 27),
-            "min_rainfall_mm": 400,
-            "max_rainfall_mm": 800,
+            "optimal_temp_range": (18, 24),
+            "min_rainfall_mm": 500,
+            "max_rainfall_mm": 700,
             "soil_types": ["loamy", "sandy loam", "fertile"],
-            "climate_zones": ["temperate", "subtropical", "tropical"],
+            "climate_zones": ["temperate"],
             "water_requirement": "medium",
             "labor_intensity": "medium",
             "risk_level": "medium"
@@ -205,11 +205,11 @@ class CropSuggestionService:
             "avg_market_price_inr_per_kg": 415,
             "investment_cost_inr_per_hectare": 664000,
             "growing_months": 6,
-            "optimal_temp_range": (15, 26),
+            "optimal_temp_range": (15, 23),
             "min_rainfall_mm": 500,
-            "max_rainfall_mm": 800,
+            "max_rainfall_mm": 750,
             "soil_types": ["sandy loam", "loamy", "well-drained"],
-            "climate_zones": ["temperate", "subtropical"],
+            "climate_zones": ["temperate"],
             "water_requirement": "medium",
             "labor_intensity": "high",
             "risk_level": "medium"
@@ -339,6 +339,106 @@ class CropSuggestionService:
         self.timeout = 30.0
         logger.info("🌾 Crop Suggestion Service initialized with profit optimization")
     
+    def _get_india_agro_climatic_zone(self, lat: float, lng: float) -> str:
+        """
+        Determine India's agro-climatic zone based on coordinates
+        India has 15 major agro-climatic zones defined by ICAR
+        """
+        # Check if location is in India
+        if not (6.0 <= lat <= 37.0 and 68.0 <= lng <= 97.0):
+            return "non-india"
+        
+        # Simplified zone classification based on lat/lng
+        # Western Himalayan Region
+        if lat > 30 and lng < 78:
+            return "western-himalayan"
+        
+        # Eastern Himalayan Region  
+        elif lat > 26 and lng > 88:
+            return "eastern-himalayan"
+        
+        # Lower Gangetic Plains (West Bengal, Bihar)
+        elif 22 < lat < 27 and 85 < lng < 90:
+            return "lower-gangetic-plains"
+        
+        # Middle Gangetic Plains (UP, Bihar)
+        elif 24 < lat < 28 and 78 < lng < 86:
+            return "middle-gangetic-plains"
+        
+        # Upper Gangetic Plains (Punjab, Haryana, W-UP)
+        elif 28 < lat < 32 and 74 < lng < 80:
+            return "upper-gangetic-plains"
+        
+        # Trans-Gangetic Plains (Punjab)
+        elif lat > 30 and 74 < lng < 76:
+            return "trans-gangetic-plains"
+        
+        # Eastern Plateau and Hills (Jharkhand, Odisha hills)
+        elif 20 < lat < 25 and 84 < lng < 87:
+            return "eastern-plateau-hills"
+        
+        # Central Plateau and Hills (MP, Chhattisgarh)
+        elif 20 < lat < 26 and 75 < lng < 84:
+            return "central-plateau-hills"
+        
+        # Western Plateau and Hills (Maharashtra plateau)
+        elif 17 < lat < 22 and 73 < lng < 78:
+            return "western-plateau-hills"
+        
+        # Southern Plateau and Hills (Karnataka, Telangana, AP)
+        elif 13 < lat < 19 and 75 < lng < 80:
+            return "southern-plateau-hills"
+        
+        # Eastern Coastal Plains (Odisha, AP, TN coast)
+        elif lat < 20 and lng > 80:
+            return "eastern-coastal-plains"
+        
+        # Western Coastal Plains and Ghats (Kerala, Karnataka coast, Goa)
+        elif lat < 20 and 73 < lng < 77:
+            return "western-coastal-plains-ghats"
+        
+        # Gujarat Plains and Hills
+        elif 20 < lat < 24 and 69 < lng < 74:
+            return "gujarat-plains-hills"
+        
+        # Western Dry Region (Rajasthan)
+        elif 24 < lat < 30 and 70 < lng < 76:
+            return "western-dry-region"
+        
+        # Island Region (Andaman, Lakshadweep - rare)
+        elif lat < 15 and (lng < 74 or lng > 92):
+            return "island-region"
+        
+        else:
+            return "general-india"
+    
+    def _estimate_rainfall_by_zone(self, india_zone: str, lat: float, lng: float) -> float:
+        """
+        Estimate annual rainfall based on India's agro-climatic zones
+        Returns rainfall in mm/year
+        """
+        zone_rainfall = {
+            "western-himalayan": 1200,
+            "eastern-himalayan": 2500,
+            "lower-gangetic-plains": 1500,
+            "middle-gangetic-plains": 1100,
+            "upper-gangetic-plains": 800,
+            "trans-gangetic-plains": 700,
+            "eastern-plateau-hills": 1300,
+            "central-plateau-hills": 1200,
+            "western-plateau-hills": 800,
+            "southern-plateau-hills": 900,
+            "eastern-coastal-plains": 1200,
+            "western-coastal-plains-ghats": 3000,  # Heavy monsoon
+            "gujarat-plains-hills": 800,
+            "western-dry-region": 400,  # Rajasthan desert
+            "island-region": 3000,
+            "general-india": 1000,
+            "non-india": 800
+        }
+        
+        return zone_rainfall.get(india_zone, 1000)
+    
     async def get_crop_suggestions(
         self,
         lat: float,
@@ -382,7 +482,7 @@ class CropSuggestionService:
                     risk_tolerance
                 )
                 
-                if score_result["suitability_score"] > 0.3:  # Only include viable crops
+                if score_result["suitability_score"] > 0.5:  # Raised threshold - only truly suitable crops
                     crop_scores.append({
                         "crop_id": crop_id,
                         "crop_data": crop_data,
@@ -435,26 +535,46 @@ class CropSuggestionService:
         else:
             climate_zone = "cold"
         
-        # Extract temperature and rainfall
-        avg_temp = 20  # Default
-        annual_rainfall = 800  # Default
+        # Determine India-specific agro-climatic zone
+        india_zone = self._get_india_agro_climatic_zone(lat, lng)
+        
+        # Extract temperature from weather data
+        avg_temp = 20  # Default fallback
+        elevation = 0
         
         if weather_data:
-            avg_temp = weather_data.get("temperature", 20)
+            avg_temp = weather_data.get("avg_temp_c") or weather_data.get("temperature") or weather_data.get("current_temp_c") or 20
+            elevation = weather_data.get("elevation_m", 0)
         
-        if crop_history and "ndvi_history" in crop_history:
-            # Average rainfall from history
+        # Extract rainfall - PRIORITIZE ACTUAL WEATHER DATA
+        annual_rainfall = None
+        
+        # First try: Use actual weather API rainfall
+        if weather_data and "avg_annual_rainfall_mm" in weather_data:
+            annual_rainfall = weather_data.get("avg_annual_rainfall_mm")
+            logger.info(f"Using weather API rainfall: {annual_rainfall}mm/year")
+        
+        # Second try: Use crop history rainfall
+        elif crop_history and "ndvi_history" in crop_history:
             rainfall_values = [
-                year.get("avg_precipitation_mm", 0) * 12  # Convert monthly to annual
+                year.get("avg_precipitation_mm", 0) * 12
                 for year in crop_history["ndvi_history"]
             ]
             if rainfall_values:
                 annual_rainfall = sum(rainfall_values) / len(rainfall_values)
+                logger.info(f"Using crop history rainfall: {annual_rainfall}mm/year")
+        
+        # Fallback: Estimate based on India agro-climatic zone
+        if annual_rainfall is None or annual_rainfall < 100:
+            annual_rainfall = self._estimate_rainfall_by_zone(india_zone, lat, lng)
+            logger.info(f"Using estimated rainfall for zone {india_zone}: {annual_rainfall}mm/year")
         
         return {
             "climate_zone": climate_zone,
+            "india_agro_zone": india_zone,
             "avg_temperature": avg_temp,
             "annual_rainfall_mm": annual_rainfall,
+            "elevation_m": elevation,
             "hemisphere": "northern" if lat >= 0 else "southern",
             "growing_season_length": self._estimate_growing_season(climate_zone, abs_lat)
         }
@@ -554,13 +674,27 @@ class CropSuggestionService:
         # 4. Risk adjustment
         risk_score = self._calculate_risk_score(crop_data, risk_tolerance)
         
-        # 5. Combined suitability score
-        suitability_score = (climate_score * 0.35 + soil_score * 0.35 + risk_score * 0.30)
+        # 5. Combined suitability score - Climate matters MORE now
+        # Increased climate weight from 0.35 to 0.50 (climate is CRITICAL)
+        suitability_score = (climate_score * 0.50 + soil_score * 0.30 + risk_score * 0.20)
         
-        # 6. Profit score (normalized)
-        profit_score = suitability_score * (roi_percentage / 100) * (net_profit / 10000)
+        # 6. AGGRESSIVE unsuitable crop filtering
+        # If climate is wrong, crop simply won't grow well - REJECT IT
+        if climate_score < 0.5:
+            # Climate unsuitable - drastically reduce score
+            suitability_score *= 0.1  # 90% penalty
+        elif climate_score < 0.7:
+            # Marginally suitable - still penalize heavily
+            suitability_score *= 0.3  # 70% penalty
         
-        # 7. Scale to farm size
+        # 7. Profit score (normalized) - Apply suitability multiplier first
+        if suitability_score < 0.5:
+            # Don't even bother showing low-suitability crops regardless of profit
+            profit_score = suitability_score * 0.01  # Near-zero profit score
+        else:
+            profit_score = suitability_score * (roi_percentage / 100) * (net_profit / 10000)
+        
+        # 8. Scale to farm size
         total_investment = crop_data["investment_cost_inr_per_hectare"] * farm_size
         total_profit = net_profit * farm_size
         
@@ -579,37 +713,64 @@ class CropSuggestionService:
         }
     
     def _calculate_climate_score(self, crop_data: Dict, climate: Dict) -> float:
-        """Calculate how well climate matches crop requirements"""
+        """Calculate how well climate matches crop requirements - STRICT SCORING"""
         
         score = 0.0
         
-        # Temperature match
+        # Temperature match - STRICT
         temp = climate["avg_temperature"]
         min_temp, max_temp = crop_data["optimal_temp_range"]
+        
         if min_temp <= temp <= max_temp:
+            # Perfect match
             score += 0.4
         else:
-            # Penalty for being outside range
-            deviation = min(abs(temp - min_temp), abs(temp - max_temp))
-            score += max(0, 0.4 - (deviation / 20))
-        
-        # Rainfall match
-        rainfall = climate["annual_rainfall_mm"]
-        if crop_data["min_rainfall_mm"] <= rainfall <= crop_data["max_rainfall_mm"]:
-            score += 0.4
-        else:
-            # Penalty for being outside range
-            if rainfall < crop_data["min_rainfall_mm"]:
-                deviation = crop_data["min_rainfall_mm"] - rainfall
+            # Heavy penalty for being outside range
+            if temp < min_temp:
+                deviation = min_temp - temp
             else:
-                deviation = rainfall - crop_data["max_rainfall_mm"]
-            score += max(0, 0.4 - (deviation / 1000))
+                deviation = temp - max_temp
+            
+            # Penalize heavily: -0.05 per degree deviation
+            penalty = deviation * 0.05
+            score += max(0, 0.4 - penalty)
         
-        # Climate zone match
+        # Rainfall match - STRICT
+        rainfall = climate["annual_rainfall_mm"]
+        
+        if crop_data["min_rainfall_mm"] <= rainfall <= crop_data["max_rainfall_mm"]:
+            # Perfect match
+            score += 0.4
+        else:
+            # Heavy penalty for being outside range
+            if rainfall < crop_data["min_rainfall_mm"]:
+                deficit = crop_data["min_rainfall_mm"] - rainfall
+                # Severe penalty for drought-prone areas
+                penalty = deficit / 200  # -0.005 per mm deficit
+            else:
+                excess = rainfall - crop_data["max_rainfall_mm"]
+                # Moderate penalty for excess rain
+                penalty = excess / 500  # -0.002 per mm excess
+            
+            score += max(0, 0.4 - penalty)
+        
+        # Climate zone match - MANDATORY for some crops
         if climate["climate_zone"] in crop_data["climate_zones"]:
             score += 0.2
+        else:
+            # SEVERE penalty for wrong climate zone
+            score *= 0.3  # Reduce total score by 70%
         
-        return min(1.0, score)
+        # Elevation penalty for high-altitude sensitive crops
+        elevation = climate.get("elevation_m", 0)
+        if elevation > 1000 and crop_data.get("name") in ["Vanilla", "Rice", "Banana", "Coconut"]:
+            # These crops don't grow well at high altitude
+            score *= 0.2
+        elif elevation > 1500 and "tropical" in crop_data.get("climate_zones", []):
+            # Most tropical crops struggle above 1500m
+            score *= 0.4
+        
+        return min(1.0, max(0.0, score))
     
     def _calculate_soil_score(self, crop_data: Dict, soil: Dict) -> float:
         """Calculate soil suitability score"""

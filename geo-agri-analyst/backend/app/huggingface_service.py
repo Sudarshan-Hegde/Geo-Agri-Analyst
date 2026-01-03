@@ -12,7 +12,8 @@ from typing import Dict, Optional, List, Tuple
 import asyncio
 import os
 import tempfile
-from app.satellite_service import get_satellite_service
+from satellite_service import get_satellite_service
+from sr_service import get_sr_service
 
 
 class HuggingFaceModelService:
@@ -30,7 +31,7 @@ class HuggingFaceModelService:
             hf_token: HuggingFace API token (required for private Spaces)
         """
         # Update this with your actual HuggingFace Space name
-        self.space_url = space_url or "HegdeSudarshan/Classifier"
+        self.space_url = space_url or "HegdeSudarshan/BigEarthNetModels"
         # For private Spaces, set your HF token here or via environment variable
         self.hf_token = hf_token or os.getenv("HF_TOKEN")
         self.client = None
@@ -224,22 +225,31 @@ class HuggingFaceModelService:
             
             result = await loop.run_in_executor(None, call_predict)
             
-            print(f"✅ Received response from HuggingFace")
+            print(f"✅ Received response from HuggingFace Classifier")
             
             # Parse response from Gradio
             # Result format: (enhanced_image_path, {"label": ..., "confidences": [...]})
             if result and len(result) >= 2:
-                enhanced_image_path = result[0]  # Path to enhanced image
+                enhanced_image_path = result[0]  # Path to enhanced image from classifier
                 predictions_data = result[1]  # Dict with label and confidences
-                
-                # Read enhanced image
-                with open(enhanced_image_path, 'rb') as f:
-                    enhanced_b64 = base64.b64encode(f.read()).decode('utf-8')
                 
                 # Convert original image to base64
                 img_byte_arr = io.BytesIO()
                 image.save(img_byte_arr, format='PNG')
                 img_b64 = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
+                
+                # Use SR-Model for better image enhancement
+                sr_service = get_sr_service()
+                sr_enhanced_b64 = await sr_service.enhance_image_to_base64(image)
+                
+                # Fallback to classifier's enhanced image if SR-Model fails
+                if sr_enhanced_b64 is None:
+                    print("⚠️ SR-Model enhancement failed, using classifier's enhanced image")
+                    with open(enhanced_image_path, 'rb') as f:
+                        enhanced_b64 = base64.b64encode(f.read()).decode('utf-8')
+                else:
+                    print("✅ Using SR-Model enhanced image")
+                    enhanced_b64 = sr_enhanced_b64
                 
                 # Extract predictions
                 if isinstance(predictions_data, dict):
@@ -267,7 +277,7 @@ class HuggingFaceModelService:
                         "before_image_b64": img_b64,
                         "after_image_b64": enhanced_b64,
                         "predictions": predictions_dict,
-                        "source": "huggingface"
+                        "source": "huggingface+sr-model"
                     }
                 else:
                     raise Exception(f"Unexpected prediction format: {predictions_data}")

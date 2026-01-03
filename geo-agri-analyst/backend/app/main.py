@@ -11,11 +11,12 @@ import logging
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Relative imports for package structure
-from app.weather_service import get_agricultural_climate_summary
-from app.huggingface_service import get_hf_service
-from app.crop_history_service import get_crop_history_service
-from app.crop_suggestion_service import get_crop_suggestion_service
-from app.polygon_utils import (
+from weather_service import get_agricultural_climate_summary
+from huggingface_service import get_hf_service
+from sr_service import get_sr_service
+from crop_history_service import get_crop_history_service
+from crop_suggestion_service import get_crop_suggestion_service
+from polygon_utils import (
     generate_grid_samples,
     estimate_polygon_area_km2,
     determine_optimal_zoom,
@@ -164,12 +165,16 @@ async def health_check():
     hf_service = get_hf_service()
     hf_healthy = await hf_service.check_health()
     
+    sr_service = get_sr_service()
+    sr_healthy = await sr_service.check_health()
+    
     return {
         "status": "healthy", 
         "mode": "live_backend_with_weather_and_ml",
         "services": {
             "weather": "available",
-            "huggingface_ml": "available" if hf_healthy else "unavailable (using fallback)"
+            "huggingface_ml": "available" if hf_healthy else "unavailable (using fallback)",
+            "sr_model": "available" if sr_healthy else "unavailable"
         }
     }
 
@@ -204,6 +209,58 @@ async def get_weather_data(coords: Coords):
             "message": f"Weather service error: {str(e)}",
             "coordinates": {"lat": coords.lat, "lng": coords.lng}
         }
+
+@app.post("/api/v1/enhance-image")
+async def enhance_satellite_image(coords: Coords):
+    """
+    Test endpoint for SR-Model image enhancement.
+    Fetches a satellite image and enhances it using the SR-Model.
+    
+    Args:
+        coords: Coordinates object with lat and lng
+        
+    Returns:
+        Original and enhanced images as base64
+    """
+    try:
+        from satellite_service import get_satellite_service
+        import base64
+        import io
+        
+        # Fetch satellite image
+        satellite_svc = get_satellite_service()
+        image = satellite_svc.get_satellite_image(coords.lat, coords.lng, size=30, zoom=17)
+        
+        if image is None:
+            raise HTTPException(status_code=404, detail="Could not fetch satellite image")
+        
+        # Convert original to base64
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='PNG')
+        original_b64 = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
+        
+        # Enhance using SR-Model
+        sr_service = get_sr_service()
+        enhanced_b64 = await sr_service.enhance_image_to_base64(image)
+        
+        if enhanced_b64 is None:
+            return {
+                "status": "partial_success",
+                "message": "SR-Model enhancement failed",
+                "coordinates": {"lat": coords.lat, "lng": coords.lng},
+                "original_image_b64": original_b64,
+                "enhanced_image_b64": original_b64  # Return original as fallback
+            }
+        
+        return {
+            "status": "success",
+            "coordinates": {"lat": coords.lat, "lng": coords.lng},
+            "original_image_b64": original_b64,
+            "enhanced_image_b64": enhanced_b64
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Enhancement error: {str(e)}")
 
 @app.post("/api/v1/crop-history")
 async def get_crop_history_data(coords: Coords):
@@ -435,7 +492,7 @@ async def analyze_location(request: Union[Coords, AnalysisRequest]):
         print(f"🔍 Using zoom level {point_zoom} for point analysis")
         
         # Get prediction with custom zoom
-        from app.satellite_service import get_satellite_service
+        from satellite_service import get_satellite_service
         satellite_svc = get_satellite_service()
         image = satellite_svc.get_satellite_image(lat, lng, size=30, zoom=point_zoom)
         

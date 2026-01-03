@@ -1,5 +1,5 @@
-/* Import leaflet CSS before Tailwind to avoid conflicts */
-@import 'leaflet/dist/leaflet.css';
+/* Import MapLibre GL CSS */
+@import 'maplibre-gl/dist/maplibre-gl.css';
 
 @tailwind base;
 @tailwind components;
@@ -245,4 +245,42 @@ body {
 
 .semantic-zoom-label {
   pointer-events: none !important;
+}
+
+/* MapLibre GL Styles */
+.maplibregl-map {
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+}
+
+.maplibregl-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.maplibregl-ctrl-attrib {
+  background: rgba(0, 0, 0, 0.8) !important;
+  color: white !important;
+}
+
+.maplibregl-ctrl button {
+  background: rgba(0, 0, 0, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.maplibregl-ctrl button:hover {
+  background: rgba(20, 20, 20, 0.9) !important;
+}
+
+.maplibregl-popup-content {
+  background: rgba(0, 0, 0, 0.95) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+}
+
+.maplibregl-popup-tip {
+  border-top-color: rgba(0, 0, 0, 0.95) !important;
 }

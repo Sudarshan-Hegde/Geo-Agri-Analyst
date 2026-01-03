@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const MapComponent = ({ onAnalyze, isLoading, selectedPos, setSelectedPos, polygonPoints, setPolygonPoints, selectionMode, setSelectionMode }) => {
+const MapComponent = ({ onAnalyze, isLoading }) => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [currentLayer, setCurrentLayer] = useState('satellite');
   const [currentLocation, setCurrentLocation] = useState('Loading location...');
   const [mapCenter, setMapCenter] = useState({ lat: 20.5937, lng: 78.9629 });
-  const markersRef = useRef([]);
-  const polygonLayerRef = useRef(null);
+  const [selectedPoint, setSelectedPoint] = useState(null);
+  const [selectionMode, setSelectionMode] = useState('point');
 
   // Function to create base style with political boundaries overlay
   const createMapStyle = (baseLayer) => {
@@ -183,34 +183,11 @@ const MapComponent = ({ onAnalyze, isLoading, selectedPos, setSelectedPos, polyg
 
     return () => {
       if (map.current) {
-        clearMarkers();
-        clearPolygon();
         map.current.remove();
         map.current = null;
       }
     };
   }, []);
-
-  // Handle external location selection (from search bar)
-  useEffect(() => {
-    if (selectedPos && map.current && mapLoaded) {
-      console.log('🗺️ Flying to searched location:', selectedPos);
-      
-      // Fly to the selected location
-      map.current.flyTo({
-        center: [selectedPos.lng, selectedPos.lat],
-        zoom: 12,
-        duration: 2000,
-        essential: true
-      });
-      
-      // Add marker if in point mode
-      if (selectionMode === 'point') {
-        clearMarkers();
-        addMarker([selectedPos.lng, selectedPos.lat], selectedPos);
-      }
-    }
-  }, [selectedPos, mapLoaded]);
 
   const changeMapStyle = (styleType) => {
     if (!map.current) return;
@@ -222,9 +199,6 @@ const MapComponent = ({ onAnalyze, isLoading, selectedPos, setSelectedPos, polyg
     const currentZoom = map.current.getZoom();
     const currentBearing = map.current.getBearing();
     const currentPitch = map.current.getPitch();
-    
-    // Store current markers and polygon data
-    const hasPolygon = polygonPoints.length >= 3;
     
     // Apply new style with political boundaries
     map.current.setStyle(createMapStyle(styleType));
@@ -246,13 +220,6 @@ const MapComponent = ({ onAnalyze, isLoading, selectedPos, setSelectedPos, polyg
         'space-color': 'rgb(11, 11, 25)',
         'star-intensity': 0.6
       });
-      
-      // Re-add polygon if it existed
-      if (hasPolygon && selectionMode === 'polygon') {
-        setTimeout(() => {
-          drawPolygon(polygonPoints);
-        }, 100);
-      }
     });
   };
 
@@ -294,248 +261,13 @@ const MapComponent = ({ onAnalyze, isLoading, selectedPos, setSelectedPos, polyg
             duration: 2000
           });
           
-          if (selectionMode === 'point') {
-            const position = { lat: parseFloat(lat), lng: parseFloat(lon) };
-            setSelectedPos(position);
-            addMarker([parseFloat(lon), parseFloat(lat)], position);
-          }
+          setSelectedPoint({ lat: parseFloat(lat), lng: parseFloat(lon) });
         }
       }
     } catch (error) {
       console.error('Error searching location:', error);
     }
   };
-
-  const handleMapClick = (e) => {
-    if (!map.current) return;
-
-    const { lng, lat } = e.lngLat;
-    
-    console.log('🖱️ Map clicked! Mode:', selectionMode, 'Position:', { lat, lng });
-
-    if (selectionMode === 'point') {
-      // Clear previous markers and set new point
-      clearMarkers();
-      const position = { lat, lng };
-      setSelectedPos(position);
-      addMarker([lng, lat], position);
-      console.log('✅ Point selected:', position);
-    } else if (selectionMode === 'polygon') {
-      // Add point to polygon
-      const newPoints = [...polygonPoints, { lat, lng }];
-      console.log('📍 Adding polygon point:', { lat, lng });
-      console.log('📊 Previous points:', polygonPoints.length, '→ New points:', newPoints.length);
-      setPolygonPoints(newPoints);
-      addMarker([lng, lat], { lat, lng }, true);
-      console.log('✅ Polygon point added. Total points:', newPoints.length);
-    } else {
-      console.warn('⚠️ Unknown selection mode:', selectionMode);
-    }
-  };
-
-  const clearMarkers = () => {
-    markersRef.current.forEach(marker => marker.remove());
-    markersRef.current = [];
-  };
-
-  const clearPolygon = () => {
-    if (!map.current) return;
-    
-    try {
-      // Remove all polygon layers
-      if (map.current.getLayer('polygon-outline-inner')) {
-        map.current.removeLayer('polygon-outline-inner');
-      }
-      if (map.current.getLayer('polygon-outline')) {
-        map.current.removeLayer('polygon-outline');
-      }
-      if (map.current.getLayer('polygon-fill')) {
-        map.current.removeLayer('polygon-fill');
-      }
-      if (map.current.getSource('polygon')) {
-        map.current.removeSource('polygon');
-      }
-      console.log('✅ Polygon cleared');
-    } catch (error) {
-      console.error('Error clearing polygon:', error);
-    }
-  };
-
-  const addMarker = (lngLat, position, isPolygonPoint = false) => {
-    if (!map.current) return;
-
-    // Create marker element
-    const el = document.createElement('div');
-    el.className = isPolygonPoint ? 'polygon-marker' : 'point-marker';
-    el.style.width = '16px';
-    el.style.height = '16px';
-    el.style.borderRadius = '50%';
-    el.style.backgroundColor = isPolygonPoint ? '#10b981' : '#3b82f6';
-    el.style.border = '3px solid white';
-    el.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
-    el.style.cursor = 'pointer';
-
-    const marker = new maplibregl.Marker({ element: el })
-      .setLngLat(lngLat)
-      .setPopup(
-        new maplibregl.Popup({ offset: 25 })
-          .setHTML(
-            `<div style="color: white; background: rgba(0,0,0,0.9); padding: 8px; border-radius: 4px;">
-              <strong style="color: ${isPolygonPoint ? '#10b981' : '#3b82f6'}">${isPolygonPoint ? '🔷 Polygon Point' : '📍 Selected Point'}</strong><br/>
-              Lat: ${position.lat.toFixed(6)}<br/>
-              Lng: ${position.lng.toFixed(6)}
-            </div>`
-          )
-      )
-      .addTo(map.current);
-
-    markersRef.current.push(marker);
-    return marker;
-  };
-
-  const drawPolygon = (points) => {
-    if (!map.current || points.length < 3) {
-      console.log('⚠️ Cannot draw polygon: need at least 3 points, have:', points.length);
-      return;
-    }
-
-    try {
-      console.log('🎨 Drawing polygon with', points.length, 'points:', points);
-
-      // Clear existing polygon first
-      clearPolygon();
-
-      // Wait a frame to ensure clear is complete
-      requestAnimationFrame(() => {
-        try {
-          // Double check map is still available and loaded
-          if (!map.current) {
-            console.log('❌ Map instance lost');
-            return;
-          }
-          
-          if (!map.current.isStyleLoaded()) {
-            console.log('⚠️ Map style not loaded, retrying in 200ms...');
-            setTimeout(() => drawPolygon(points), 200);
-            return;
-          }
-
-          // Create GeoJSON for the polygon
-          const coordinates = points.map(p => [p.lng, p.lat]);
-          coordinates.push(coordinates[0]); // Close the polygon
-
-          const geojson = {
-            type: 'Feature',
-            geometry: {
-              type: 'Polygon',
-              coordinates: [coordinates]
-            }
-          };
-
-          console.log('📐 Polygon GeoJSON:', geojson);
-
-          // Add source
-          map.current.addSource('polygon', {
-            type: 'geojson',
-            data: geojson
-          });
-
-          // Add fill layer with enhanced visibility and glow effect
-          map.current.addLayer({
-            id: 'polygon-fill',
-            type: 'fill',
-            source: 'polygon',
-            paint: {
-              'fill-color': '#10b981',
-              'fill-opacity': 0.5
-            }
-          });
-
-          // Add outline layer with glow
-          map.current.addLayer({
-            id: 'polygon-outline',
-            type: 'line',
-            source: 'polygon',
-            paint: {
-              'line-color': '#10b981',
-              'line-width': 5,
-              'line-opacity': 1,
-              'line-blur': 2
-            }
-          });
-
-          // Add inner outline for more definition
-          map.current.addLayer({
-            id: 'polygon-outline-inner',
-            type: 'line',
-            source: 'polygon',
-            paint: {
-              'line-color': '#ffffff',
-              'line-width': 2,
-              'line-opacity': 0.8
-            }
-          });
-
-          console.log('✅ Polygon drawn successfully!');
-        } catch (innerError) {
-          console.error('❌ Error in drawPolygon inner:', innerError);
-        }
-      });
-    } catch (error) {
-      console.error('❌ Error drawing polygon:', error);
-    }
-  };
-
-  // Update click handler when selectionMode or polygonPoints change
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-    
-    // Remove old handler
-    map.current.off('click', handleMapClick);
-    // Add new handler with current closure
-    map.current.on('click', handleMapClick);
-    
-    console.log('🔄 Click handler updated for mode:', selectionMode);
-    
-    return () => {
-      if (map.current) {
-        map.current.off('click', handleMapClick);
-      }
-    };
-  }, [selectionMode, polygonPoints, selectedPos, mapLoaded]);
-
-  // Clear polygon when switching to point mode
-  useEffect(() => {
-    console.log('🔄 Selection mode changed to:', selectionMode);
-    if (selectionMode === 'point') {
-      clearPolygon();
-      if (polygonPoints.length > 0) {
-        console.log('🗑️ Clearing', polygonPoints.length, 'polygon points');
-        setPolygonPoints([]);
-      }
-    } else if (selectionMode === 'polygon') {
-      clearMarkers();
-      if (selectedPos) {
-        console.log('🗑️ Clearing selected point');
-        setSelectedPos(null);
-      }
-    }
-  }, [selectionMode]);
-
-  // Redraw polygon when points change
-  useEffect(() => {
-    console.log('🔄 Polygon points changed:', polygonPoints.length, 'Mode:', selectionMode);
-    if (selectionMode === 'polygon' && polygonPoints.length >= 3 && map.current) {
-      // Small delay to ensure state is updated
-      const timer = setTimeout(() => {
-        drawPolygon(polygonPoints);
-      }, 100);
-      return () => clearTimeout(timer);
-    } else if (selectionMode === 'polygon' && polygonPoints.length < 3 && polygonPoints.length > 0) {
-      console.log('ℹ️ Need', 3 - polygonPoints.length, 'more point(s) to draw polygon');
-      clearPolygon();
-    }
-  }, [polygonPoints, selectionMode]);
 
   const handleAnalyze = () => {
     if (onAnalyze && selectedPoint) {
@@ -544,9 +276,18 @@ const MapComponent = ({ onAnalyze, isLoading, selectedPos, setSelectedPos, polyg
   };
 
   return (
-    <div className="w-full h-full">
+    <div className="flex flex-col gap-4 h-full">
+      {/* Location Display */}
+      <div className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+        <span className="text-sm font-medium text-blue-300">{currentLocation}</span>
+      </div>
+
       {/* Map Container with Layer Switcher */}
-      <div className="relative w-full h-full">
+      <div className="relative flex-1" style={{ minHeight: '500px' }}>
         <div 
           ref={mapContainer} 
           className="w-full h-full rounded-xl overflow-hidden"
@@ -614,62 +355,6 @@ const MapComponent = ({ onAnalyze, isLoading, selectedPos, setSelectedPos, polyg
           </button>
         </div>
 
-        {/* Selection Mode Toggle - Bottom Left */}
-        <div className="absolute bottom-4 left-4 z-10 bg-gray-900/95 border border-emerald-500/30 rounded-lg p-2 flex gap-2 backdrop-blur-sm">
-          <button 
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${
-              selectionMode === 'point' 
-                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-lg shadow-emerald-500/30' 
-                : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:text-emerald-300'
-            }`}
-            onClick={() => {
-              console.log('🔘 Point mode button clicked');
-              setSelectionMode('point');
-            }}
-            title="Point Selection"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-              <circle cx="12" cy="10" r="3"/>
-            </svg>
-            <span className="text-xs font-medium">Point</span>
-          </button>
-          <button 
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${
-              selectionMode === 'polygon' 
-                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-lg shadow-emerald-500/30' 
-                : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:text-emerald-300'
-            }`}
-            onClick={() => {
-              console.log('🔷 Polygon mode button clicked');
-              setSelectionMode('polygon');
-            }}
-            title="Polygon Selection"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2l9 4.9V17L12 22l-9-4.9V7z"/>
-            </svg>
-            <span className="text-xs font-medium">Polygon</span>
-          </button>
-          {selectionMode === 'polygon' && polygonPoints.length > 0 && (
-            <button 
-              className="flex items-center gap-2 px-3 py-2 rounded-lg transition-all border bg-red-500/20 border-red-500 text-red-400 hover:bg-red-500/30"
-              onClick={() => {
-                setPolygonPoints([]);
-                clearMarkers();
-                clearPolygon();
-              }}
-              title="Clear Polygon"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-              <span className="text-xs font-medium">Clear ({polygonPoints.length})</span>
-            </button>
-          )}
-        </div>
-
         {/* Location Info Panel */}
         <div className="absolute bottom-4 right-4 z-10 bg-gray-900/95 border border-blue-500/30 rounded-lg p-4 backdrop-blur-sm min-w-[200px]">
           <h3 className="text-sm font-semibold text-blue-400 mb-3">Location Info</h3>
@@ -689,6 +374,45 @@ const MapComponent = ({ onAnalyze, isLoading, selectedPos, setSelectedPos, polyg
           </div>
         </div>
       </div>
+
+      {/* Selection Mode Buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setSelectionMode('point')}
+          className={`px-4 py-2 rounded-lg transition-all ${
+            selectionMode === 'point'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          Point Selection
+        </button>
+        <button
+          onClick={() => setSelectionMode('polygon')}
+          className={`px-4 py-2 rounded-lg transition-all ${
+            selectionMode === 'polygon'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          Area Selection
+        </button>
+      </div>
+
+      {/* Analyze Button */}
+      {selectedPoint && (
+        <button
+          onClick={handleAnalyze}
+          disabled={isLoading}
+          className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+            isLoading
+              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              : 'bg-green-500 text-white hover:bg-green-600'
+          }`}
+        >
+          {isLoading ? 'Analyzing...' : 'Analyze Selected Area'}
+        </button>
+      )}
     </div>
   );
 };

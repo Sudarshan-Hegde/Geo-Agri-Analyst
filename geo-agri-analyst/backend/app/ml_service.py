@@ -12,8 +12,8 @@ class ModelService:
     """
     
     def __init__(self):
-        self.client = Client("HegdeSudarshan/Classifier")
-        print("ModelService initialized with Hugging Face Classifier API.")
+        self.client = Client("HegdeSudarshan/BigEarthNetModels")
+        print("ModelService initialized with Hugging Face BigEarthNetModels API.")
     
     def _load_models(self):
         """Load both SR and Classification models from saved weights"""

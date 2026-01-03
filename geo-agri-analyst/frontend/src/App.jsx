@@ -79,6 +79,7 @@ function HomePage({ onAnalyze }) {
 
   const handleLocationSearch = (lat, lng, displayName) => {
     // This will be called from SearchBar
+    console.log('🔍 Search location selected:', displayName, { lat, lng });
     setSelectedPos({ lat, lng });
   }
 
@@ -100,18 +101,25 @@ function HomePage({ onAnalyze }) {
       let requestData
       
       if (analysisData.type === 'polygon') {
+        // Convert polygon points to the correct format
+        const polygonPointsArray = analysisData.points.map(p => [p.lat, p.lng]);
+        const avgLat = analysisData.points.reduce((sum, point) => sum + point.lat, 0) / analysisData.points.length;
+        const avgLng = analysisData.points.reduce((sum, point) => sum + point.lng, 0) / analysisData.points.length;
+        
         requestData = {
           type: 'polygon',
-          points: analysisData.points,
-          lat: analysisData.points.reduce((sum, point) => sum + point[0], 0) / analysisData.points.length,
-          lng: analysisData.points.reduce((sum, point) => sum + point[1], 0) / analysisData.points.length
+          points: polygonPointsArray,
+          lat: avgLat,
+          lng: avgLng
         }
+        console.log('📊 Sending polygon analysis request:', requestData);
       } else {
         requestData = {
           type: 'point',
           lat: analysisData.position.lat,
           lng: analysisData.position.lng
         }
+        console.log('📍 Sending point analysis request:', requestData);
       }
 
       const response = await axios.post('http://localhost:8000/api/v1/analyze', requestData)
@@ -131,30 +139,18 @@ function HomePage({ onAnalyze }) {
   }
 
   return (
-    <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 py-4 pt-32 lg:pt-36">
+    <div className="fixed inset-0 pt-32 lg:pt-36 overflow-hidden" style={{ paddingBottom: '70px' }}>
       {/* Add spacing for search bar */}
       <div className="mb-24 lg:mb-16"></div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6 lg:items-stretch">
-        <div className="lg:col-span-2 xl:col-span-3 relative">
+      <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6 h-full" style={{ paddingLeft: '5px', paddingRight: '1.5rem' }}>
+        <div className="lg:col-span-2 xl:col-span-3 relative h-full">
           {/* Search Bar - Positioned above map card */}
           <div className="absolute -top-20 lg:-top-24 left-1/2 transform -translate-x-1/2 w-11/12 max-w-2xl z-[9999]">
             <SearchBar onLocationSelect={handleLocationSearch} />
           </div>
           
-          <div className="glass-card rounded-xl lg:rounded-2xl overflow-hidden hover:shadow-2xl transition-all duration-500 h-full min-h-[600px] relative">
-            <div className="absolute top-0 left-0 right-0 z-[999] bg-black/20 backdrop-blur-sm border-b border-white/10">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 lg:p-4 gap-2 sm:gap-0">
-                <div className="text-xs lg:text-sm text-gray-400 glass px-2 lg:px-3 py-1 rounded-full">
-                  Click anywhere to analyze
-                </div>
-                <div className="flex items-center space-x-2 lg:space-x-3">
-                  <div className="w-2 h-2 lg:w-3 lg:h-3 bg-emerald-400 rounded-full animate-pulse"></div>
-                  <h2 className="text-lg lg:text-xl font-bold text-white">Interactive Map</h2>
-                </div>
-              </div>
-            </div>
-            
+          <div className="glass-card rounded-xl lg:rounded-2xl overflow-hidden hover:shadow-2xl transition-all duration-500 h-full w-full">
             <div className="absolute inset-0">
               <MapComponent 
                 selectedPos={selectedPos}
@@ -171,8 +167,8 @@ function HomePage({ onAnalyze }) {
           </div>
         </div>
 
-        <div className="lg:col-span-1 xl:col-span-1 space-y-4 lg:space-y-6">
-          <div className="glass-card rounded-xl lg:rounded-2xl p-4 lg:p-6">
+        <div className="lg:col-span-1 xl:col-span-1 flex flex-col gap-4 lg:gap-6 h-full overflow-hidden">
+          <div className="glass-card rounded-xl lg:rounded-2xl p-4 lg:p-6 flex-shrink-0">
             <div className="flex items-center space-x-3 mb-4 lg:mb-6">
               <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse"></div>
               <h3 className="text-lg lg:text-xl font-bold text-white">Analysis Control</h3>
@@ -239,30 +235,12 @@ function HomePage({ onAnalyze }) {
             </div>
           </div>
 
-          <div className="glass-card rounded-xl lg:rounded-2xl p-4 lg:p-6 overflow-y-auto">
+          <div className="glass-card rounded-xl lg:rounded-2xl p-4 lg:p-6 flex-1 overflow-y-auto min-h-0">
             <ResultsPanel 
               isLoading={isLoading}
               error={error}
               data={predictionData}
             />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-8 glass rounded-xl p-4 lg:p-6">
-        <div className="flex flex-col lg:flex-row items-center justify-between text-xs lg:text-sm text-gray-400 gap-4">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-              <span>Backend: Ready</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-              <span>Map: Interactive</span>
-            </div>
-          </div>
-          <div className="text-xs text-center lg:text-right">
-            Powered by PyTorch • Super-Resolution + Classification • Satellite Analysis
           </div>
         </div>
       </div>

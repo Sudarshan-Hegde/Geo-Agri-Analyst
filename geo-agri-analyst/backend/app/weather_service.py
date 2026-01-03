@@ -19,7 +19,7 @@ WEATHER_API_URL = "https://api.open-meteo.com/v1/forecast"
 
 async def get_climate_data(lat: float, lng: float) -> Optional[Dict[str, Any]]:
     """
-    Fetches current weather and basic climate estimates for a specific lat/lng.
+    Fetches current weather, climate estimates, and elevation for a specific lat/lng.
     
     Args:
         lat (float): Latitude coordinate
@@ -32,6 +32,7 @@ async def get_climate_data(lat: float, lng: float) -> Optional[Dict[str, Any]]:
         {
             "avg_temp_c": 15.2,
             "avg_annual_rainfall_mm": 850.5,
+            "elevation_m": 150,
             "location": {"lat": 40.7128, "lng": -74.0060},
             "data_source": "Open-Meteo"
         }
@@ -39,8 +40,8 @@ async def get_climate_data(lat: float, lng: float) -> Optional[Dict[str, Any]]:
     params = {
         "latitude": lat,
         "longitude": lng,
-        "current": ["temperature_2m", "relative_humidity_2m", "precipitation"],
-        "daily": ["temperature_2m_max", "temperature_2m_min", "precipitation_sum"],
+        "current": "temperature_2m,relative_humidity_2m,precipitation",
+        "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
         "timezone": "auto",
         "forecast_days": 7
     }
@@ -58,6 +59,7 @@ async def get_climate_data(lat: float, lng: float) -> Optional[Dict[str, Any]]:
             # Process the response data (Open-Meteo Weather API format)
             current_data = data.get('current', {})
             daily_data = data.get('daily', {})
+            elevation = data.get('elevation', 0)
             
             # Get current temperature
             current_temp = current_data.get('temperature_2m')
@@ -73,11 +75,24 @@ async def get_climate_data(lat: float, lng: float) -> Optional[Dict[str, Any]]:
             else:
                 avg_temp = current_temp
             
+            # Adjust temperature for elevation (lapse rate: -0.6°C per 100m)
+            if elevation and elevation > 0:
+                # This is already adjusted by the API, so we just note it
+                pass
+            
             # Calculate weekly precipitation estimate (convert to annual estimate)
             precip_values = daily_data.get('precipitation_sum', [])
             weekly_precip = sum(precip_values) if precip_values else 0
-            # Rough annual estimate: weekly * 52
-            estimated_annual_rainfall = weekly_precip * 52
+            # Better annual estimate: Use climate-based multiplier
+            # For India: Monsoon pattern means weekly * 52 is inaccurate
+            # Use a more conservative estimate based on latitude
+            abs_lat = abs(lat)
+            if abs_lat < 23.5:  # Tropical - high rainfall
+                estimated_annual_rainfall = weekly_precip * 45  # ~2250mm/year baseline
+            elif abs_lat < 35:  # Subtropical - moderate
+                estimated_annual_rainfall = weekly_precip * 40  # ~1200mm/year baseline  
+            else:  # Temperate - lower
+                estimated_annual_rainfall = weekly_precip * 35  # ~800mm/year baseline
             
             # Format the response
             climate_vitals = {
@@ -85,6 +100,7 @@ async def get_climate_data(lat: float, lng: float) -> Optional[Dict[str, Any]]:
                 "current_temp_c": round(current_temp, 1) if current_temp is not None else None,
                 "avg_annual_rainfall_mm": round(estimated_annual_rainfall, 1) if estimated_annual_rainfall else None,
                 "weekly_precipitation_mm": round(weekly_precip, 1),
+                "elevation_m": round(elevation, 0) if elevation else 0,
                 "location": {
                     "lat": lat,
                     "lng": lng
